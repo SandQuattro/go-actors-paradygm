@@ -13,11 +13,11 @@ type Actor struct {
 	messageQueue chan any
 }
 
-func NewActor(ctx context.Context, name string) Actor {
+func NewActor(ctx context.Context, name string) *Actor {
 	ctx = utils.GetCtxWithScope(ctx, "Actor Constructor")
 	logger := zerologger.GetCtxLogger(ctx)
 
-	actor := Actor{
+	actor := &Actor{
 		Name:         name,
 		state:        "created",
 		messageQueue: make(chan any),
@@ -29,14 +29,12 @@ func NewActor(ctx context.Context, name string) Actor {
 	return actor
 }
 
-// Обработчик сообщений актора
-func (a Actor) start(ctx context.Context) {
+func (a *Actor) start(ctx context.Context) {
 	for msg := range a.messageQueue {
 		a.handleMessage(ctx, msg)
 	}
 }
 
-// Обработка сообщения и изменение состояния
 func (a *Actor) handleMessage(ctx context.Context, msg any) {
 	ctx = utils.GetCtxWithScope(ctx, "Actor Handler")
 	logger := zerologger.GetCtxLogger(ctx)
@@ -44,9 +42,9 @@ func (a *Actor) handleMessage(ctx context.Context, msg any) {
 	switch m := msg.(type) {
 	case SimpleMessage:
 		logger.Info().Msgf("%s received message: %s from %s", a.Name, m.Content, m.SenderName)
-		a.state = "closed"
-	case StateMessage:
+	case CloseActorMessage:
 		logger.Info().Msgf("actor %s state: %s", a.Name, a.state)
+		a.state = "closed"
 	}
 }
 
@@ -55,16 +53,21 @@ func (senderActor Actor) SendMessage(ctx context.Context, msg any, receiverActor
 	ctx = utils.GetCtxWithScope(ctx, "ActorSystem Sending Message")
 	logger := zerologger.GetCtxLogger(ctx)
 
-	if receiverActor != nil && receiverActor.state != "closed" {
+	if receiverActor != nil {
+		if receiverActor.state == "closed" {
+			logger.Info().Msgf("actor:%s we are closed! come tomorrow!!", receiverActor.Name)
+			return
+		}
+
 		switch m := msg.(type) {
 		case SimpleMessage:
 			m.SenderName = senderActor.Name
-			logger.Info().Msgf("actor:%s sending message:%s to actor:%s", senderActor.Name, m.Content, receiverActor.Name)
+			logger.Info().Msgf("actor:%s is sending message:%s to the actor:%s", senderActor.Name, m.Content, receiverActor.Name)
 			receiverActor.messageQueue <- m
-		case StateMessage:
+		case CloseActorMessage:
 			receiverActor.messageQueue <- m
 		}
 	} else {
-		log.Printf("Actor with name '%s' not found\n", receiverActor.Name)
+		log.Printf("Actor not found\n")
 	}
 }

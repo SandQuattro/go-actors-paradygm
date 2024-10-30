@@ -5,5 +5,5 @@ type SimpleMessage struct {
 	Content    string
 }
 
-type StateMessage struct {
+type CloseActorMessage struct {
 }
